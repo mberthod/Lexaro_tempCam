@@ -20,6 +20,7 @@ Système de monitoring thermique et radar basé sur ESP32‑S3 (Arduino/Platform
   - [CLI USB (interpréteur)](#cli-usb-interpréteur)
 - [Algorithmes et architecture](#algorithmes-et-architecture)
 - [Dépannage (FAQ)](#dépannage-faq)
+- [Documentation (Doxygen)](#documentation-doxygen)
 - [Notes MLX90640 (driver officiel)](#notes-mlx90640-driver-officiel)
 - [Crédits & licences](#crédits--licences)
 
@@ -137,6 +138,26 @@ Dans le moniteur série (115200), taper:
 - MLX debug: `mlx status`, `mlx verbose on|off`, `mlx probe`, `mlx read reg=0x8000`, `mlx ping`, `mlx speed 100k|400k|1m`, `mlx power`
 - Système: `system info`
 
+## Documentation (Doxygen)
+La documentation de l’API (headers `ota_manager.h`, `telemetry.h`, `commands.h`, `MLX90640_I2C_Driver.h`, …) est générable avec **Doxygen**.
+
+Construire localement:
+1) Installer Doxygen (Windows: `choco install doxygen.install graphviz` recommandé pour Graphviz)
+2) Ouvrir un terminal à la racine du repo
+3) Lancer:
+   ```bash
+   cd docs
+   doxygen Doxyfile
+   ```
+4) Ouvrir `docs/build/html/index.html`
+
+Contenu:
+- Entrées: `src/` (code), `README.md`, `docs/COMMANDS.md`
+- Sortie: `docs/build/html/`
+
+Publication GitHub Pages (optionnel):
+- Activer Pages sur la branche principale en pointant vers `docs/build/html` (workflow conseillé).
+
 ## Algorithmes et architecture
 - Tâches FreeRTOS:
   - IR (8–16 Hz): MLX90640 → calibration → segmentation → centroid/spot → heatmap WS
@@ -169,6 +190,10 @@ Dans le moniteur série (115200), taper:
 **Image IR “fausse”**
 - Confirmer que MLX répond (ping=0, `mlx probe` OK), câblage correct, 3.3 V stable
 - Vérifier que la page reçoit des trames `{"type":"ir",…}` via WS
+
+**OTA ne logge pas les étapes**
+- Activer le verbeux: `ota verbose on` (USB) ou `/ota%20verbose%20on` (WS)
+- Relancer `ota run` et vérifier: `OTA start`, `preflight`, `final_url`, `update begin`, `ok`, puis `rebooting`
 
 ## Notes MLX90640 (driver officiel)
 - Driver Melexis (API + I2C) intégré localement (voir `src/src/drivers/MLX90640_API.*` et `MLX90640_I2C_Driver.*`)

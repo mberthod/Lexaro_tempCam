@@ -13,7 +13,7 @@
 
 // -------- Firmware metadata --------
 #define LEXARO_FW_NAME      "Lexaro TempCam"
-#define LEXARO_FW_VERSION   "0.0.1"
+#define LEXARO_FW_VERSION   "0.0.2"
 #define LEXARO_FW_AUTHOR    "Mathieu / Hexacore"
 #define LEXARO_FW_COMPANY   "Lexaro"
 #define LEXARO_FW_BUILD_DATE __DATE__ " " __TIME__
@@ -412,6 +412,9 @@ void setup() {
   // LD600CH radar UART on GPIO43 (RX) / GPIO44 (TX), 115200 8N1
   RadarUART.begin(115200, SERIAL_8N1, 43, 44);
   xTaskCreatePinnedToCore(taskUartBridge, "UartBridge", 4096, nullptr, 3, &s_taskUartBridge, APP_CPU_NUM);
+  // Augmente la pile pour éviter overflow lors de flux soutenus / OTA
+  vTaskDelete(s_taskUartBridge);
+  xTaskCreatePinnedToCore(taskUartBridge, "UartBridge", 8192, nullptr, 3, &s_taskUartBridge, APP_CPU_NUM);
   xTaskCreatePinnedToCore(taskSensors, "EnvSensors", 4096, nullptr, 3, &s_taskSensors, APP_CPU_NUM);
   xTaskCreatePinnedToCore(taskMic, "MicRms", 4096, nullptr, 3, &s_taskMic, APP_CPU_NUM);
 }
@@ -767,6 +770,11 @@ void taskUartBridge(void* param) {
       if (l.indexOf("status") >= 0) { Serial.println(ota_status()); return; }
       if (l.indexOf("auto on") >= 0) { ota_set_auto(true); Serial.println("OK ota auto on"); return; }
       if (l.indexOf("auto off") >= 0) { ota_set_auto(false); Serial.println("OK ota auto off"); return; }
+      if (l.indexOf("verbose") >= 0) {
+        if (l.indexOf("on") >= 0) { ota_set_verbose(true); Serial.println("OK ota verbose on"); return; }
+        if (l.indexOf("off") >= 0) { ota_set_verbose(false); Serial.println("OK ota verbose off"); return; }
+        Serial.printf("ota_verbose=%s\r\n", ota_get_verbose() ? "on" : "off"); return;
+      }
       if (l.indexOf("set") >= 0) {
         // ota set url=<URL>
         String url;
@@ -788,13 +796,13 @@ void taskUartBridge(void* param) {
         Serial.println("OK ota set");
         return;
       }
-      if (l.indexOf("run") >= 0) {
+      if (l.indexOf("run") >= 0 || l.indexOf("start") >= 0) {
         String err;
         bool ok = ota_run_now(&err);
         if (!ok) Serial.printf("ERR ota %s\r\n", err.c_str());
         return;
       }
-      Serial.println("ERR ota usage: ota set url=<URL> | ota run | ota status | ota auto on|off");
+      Serial.println("ERR ota usage: ota set url=<URL> | ota run|start | ota status | ota auto on|off | ota verbose on|off|status");
       return;
     }
     if (l.startsWith("system info")) {
@@ -823,6 +831,8 @@ void taskUartBridge(void* param) {
         }
       }
     }
+    // Si OTA en cours, alléger la tâche UART pour éviter overflow
+    if (ota_is_running()) { vTaskDelay(pdMS_TO_TICKS(20)); continue; }
     int n = RadarUART.available();
     if (n > 0) {
       if (n > (int)sizeof(buf)) n = sizeof(buf);

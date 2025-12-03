@@ -216,6 +216,14 @@ void commands_handle_line(const char* line) {
       String m = String("ERR ota ") + err;
       telemetry_log(m.c_str());
     }
+  } else if (s == "/ota verbose on") {
+    ota_set_verbose(true);
+    telemetry_log("ACK%20ota%20verbose%20on");
+  } else if (s == "/ota verbose off") {
+    ota_set_verbose(false);
+    telemetry_log("ACK%20ota%20verbose%20off");
+  } else if (s == "/ota verbose status") {
+    telemetry_log(ota_get_verbose() ? "ACK%20ota%20verbose%20on" : "ACK%20ota%20verbose%20off");
   } else if (s == "/ota status") {
     String st = ota_status();
     telemetry_log(st.c_str());
