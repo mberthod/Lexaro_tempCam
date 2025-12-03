@@ -3,6 +3,7 @@
 #include "telemetry.h"
 #include "wifi_manager.h"
 #include "mqtt_manager.h"
+#include "ota_manager.h"
 #include <Preferences.h>
 #include <string>
 #include <vector>
@@ -189,6 +190,41 @@ void commands_handle_line(const char* line) {
     const char* payload = "{\"type\":\"test\",\"ok\":true}";
     bool ok = mqtt_publish_json("test", payload);
     telemetry_log(ok ? "ACK%20mqtt%20test" : "ERR%20mqtt%20test");
+  } else if (s.rfind("/ota set?", 0) == 0) {
+    size_t q = s.find('?');
+    std::string query = (q != std::string::npos) ? s.substr(q + 1) : "";
+    std::string url;
+    size_t pos = 0;
+    while (pos < query.size()) {
+      size_t amp = query.find('&', pos);
+      std::string pair = query.substr(pos, amp == std::string::npos ? std::string::npos : amp - pos);
+      size_t eq = pair.find('=');
+      if (eq != std::string::npos) {
+        std::string key = pair.substr(0, eq);
+        std::string val = pair.substr(eq + 1);
+        if (key == "url") url = val;
+      }
+      if (amp == std::string::npos) break;
+      pos = amp + 1;
+    }
+    if (url.empty()) { telemetry_log("ERR%20ota%20missing%20url"); }
+    else { ota_set_url(url.c_str()); telemetry_log("ACK%20ota%20set"); }
+  } else if (s == "/ota run") {
+    String err;
+    bool ok = ota_run_now(&err);
+    if (!ok) {
+      String m = String("ERR ota ") + err;
+      telemetry_log(m.c_str());
+    }
+  } else if (s == "/ota status") {
+    String st = ota_status();
+    telemetry_log(st.c_str());
+  } else if (s == "/ota auto on") {
+    ota_set_auto(true);
+    telemetry_log("ACK%20ota%20auto%20on");
+  } else if (s == "/ota auto off") {
+    ota_set_auto(false);
+    telemetry_log("ACK%20ota%20auto%20off");
   } else if (s == "/help") {
     telemetry_log("ACK%20help%20use%20/ws%20restart%7Cstop%7Cstart%2C%20/wifi%20portal%7Cportal%20stop%2C%20/mqtt%20set%7Con%7Cconnect%7Cstatus");
   } else {

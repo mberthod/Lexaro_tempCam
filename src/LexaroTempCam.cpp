@@ -38,6 +38,7 @@ extern "C" {
 #include "src/net/commands.h"
 #include "src/net/wifi_manager.h"
 #include "src/net/mqtt_manager.h"
+#include "src/net/ota_manager.h"
 #include "src/ui/ui_status.h"
 
 // -----------------------------
@@ -400,6 +401,13 @@ void setup() {
   mqc.baseTopic = "lexaro";
   mqtt_set_config(mqc);
   mqtt_enable(false);
+  // OTA: init et auto-check (si configuré et Wi‑Fi connecté)
+  ota_init();
+  if (ota_get_auto() && WiFi.status() == WL_CONNECTED) {
+    telemetry_log("OTA%20auto%20check");
+    String err;
+    ota_run_now(&err); // si update dispo, la carte redémarre
+  }
   
   // LD600CH radar UART on GPIO43 (RX) / GPIO44 (TX), 115200 8N1
   RadarUART.begin(115200, SERIAL_8N1, 43, 44);
@@ -753,6 +761,40 @@ void taskUartBridge(void* param) {
       // Try re-init
       bool ok = g_irManager.begin(g_i2c);
       Serial.println(ok ? "OK mlx reinit" : "ERR mlx reinit");
+      return;
+    }
+    if (l.startsWith("ota ")) {
+      if (l.indexOf("status") >= 0) { Serial.println(ota_status()); return; }
+      if (l.indexOf("auto on") >= 0) { ota_set_auto(true); Serial.println("OK ota auto on"); return; }
+      if (l.indexOf("auto off") >= 0) { ota_set_auto(false); Serial.println("OK ota auto off"); return; }
+      if (l.indexOf("set") >= 0) {
+        // ota set url=<URL>
+        String url;
+        int p = 0;
+        while (p < s.length()) {
+          int sp = s.indexOf(' ', p);
+          if (sp < 0) sp = s.length();
+          String tok = s.substring(p, sp);
+          int eq = tok.indexOf('=');
+          if (eq > 0) {
+            String key = tok.substring(0, eq); key.toLowerCase();
+            String val = tok.substring(eq + 1);
+            if (key == "url") url = val;
+          }
+          p = sp + 1;
+        }
+        if (url.length() == 0) { Serial.println("ERR ota missing url"); return; }
+        ota_set_url(url);
+        Serial.println("OK ota set");
+        return;
+      }
+      if (l.indexOf("run") >= 0) {
+        String err;
+        bool ok = ota_run_now(&err);
+        if (!ok) Serial.printf("ERR ota %s\r\n", err.c_str());
+        return;
+      }
+      Serial.println("ERR ota usage: ota set url=<URL> | ota run | ota status | ota auto on|off");
       return;
     }
     if (l.startsWith("system info")) {
